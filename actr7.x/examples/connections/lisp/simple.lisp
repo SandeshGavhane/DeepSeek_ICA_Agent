@@ -123,6 +123,6 @@
              (when id
                (if error
                    (send-actr-message *stream* (format nil "{\"result\":null,\"error\":{\"message\": ~s},\"id\":~a}" error (json:encode-json-to-string id)))
-                 (send-actr-message *stream* (format nil "{\"result\":[~d],\"error\":null,\"id\":~a}" result (json:encode-json-to-string id)))))))
+                   (send-actr-message *stream* (format nil "{\"result\":[~d],\"error\":null,\"id\":~a}" result (json:encode-json-to-string id)))))))
           
           (t (format t "Unexpected message from ACT-R: ~s~%" message)))))

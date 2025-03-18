@@ -41,4 +41,4 @@
 
 ;; Load a model which doesn't do anything.
 
-(load "ACT-R:examples;vision-module;multi-window-model.lisp")
+(load-act-r-model "ACT-R:examples;vision-module;multi-window-model.lisp")

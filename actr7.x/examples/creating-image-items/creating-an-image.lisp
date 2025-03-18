@@ -48,7 +48,7 @@
     (print-visicon)
     
     ;; run for up to 5 seconds using real-time if the window is visible
-    (run 5 visible)))
+    (run 30 visible)))
 
 
 #|

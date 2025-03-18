@@ -153,7 +153,7 @@
 					; seconds in real-time mode.
         
         (install-device window)
-        (run 600 t)))
+        (run 30 t)))
     
 	;; clean-up: remove hooks
 	(remove-act-r-command-monitor "output-key" "geomates-key-press")
