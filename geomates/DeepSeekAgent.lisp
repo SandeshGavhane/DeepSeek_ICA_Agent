@@ -31,1300 +31,477 @@
 ;;; Now comes the core Act-R agent
 ;;;
 
-(define-model geomates-agent
 
-  ;; [find explanation in actr7.x/examples/vision-module]
-  (chunk-type (polygon-feature (:include visual-location)) regular rotation diamonds value)
-  (chunk-type (polygon (:include visual-object)) sides screen-x screen-y radius rotation)
-  (chunk-type (oval (:include visual-object)) screen-x screen-y radius diamonds)
-  ;; Add new chunk type to store positions and player information
+;;;
+;;; Basic ACT-R model for Geomates game - For testing player detection
+;;;  
 
+;;;
+;;; ACT-R model for Geomates game - Player Detection Focus
+;;;  
 
-  (chunk-type player-state 
-   player-type    ; rect or disc
-   rect-x rect-y  ; rectangle position for detecting player type
-   rect-width     ; for testing player type
-   test-sent      ; for player detection
-   diamond-x diamond-y  ; diamond location
-   horizontal-first     ; movement strategy
-   current-goal)        ; what the agent is trying to do
+;;; Define the model
+(define-model geomates-player-detection
 
-  
-  ;; [might be obsolete] Do this to avoid the warnings when the chunks are created
-  (define-chunks true false polygon)
-  
-  ;; [might be obsolete] stuff the leftmost item
-  (set-visloc-default screen-x lowest)
+;;; Define chunk types for game objects and player state awareness
+(chunk-type (polygon-feature (:include visual-location)) regular)
+(chunk-type (polygon (:include visual-object)) sides height width rotation diamonds player-type)
+(chunk-type goal state intention target-x target-y warm-up-count)
+(chunk-type control intention button)
+(chunk-type time ticks)
+(chunk-type player-info type)
+(chunk-type diamond-location x y distance)
+(chunk-type platform-location x y width height)
+(chunk-type path-planning step next-move obstacle-ahead)
 
-  (chunk-type goal state intention)
-  (chunk-type control intention button)
+;;; Do this to avoid warnings when chunks are created
+(define-chunks true false polygon)
 
-  (add-dm
-   (move-left) (move-right)
-   (move-up)  (move-down)
-   (w) (a) (s) (d)
-   (i-dont-know-where-to-go)
-   (initializing-game)
-   (waiting-for-objects)
-   (checking-for-rect)
-   (found-rect)
-   (ready-for-test)
-   (waiting-for-response)
-   (checking-rect)
-   (player-identified)
-   (something-should-change)
-   (i-want-to-do-something)
-   (first-step)
-   (second-step)
-   (warming-up-game)
-   (searching-for-diamond)
-   (found-diamond)
-   (try-search-method-2)
-   (random-exploration)
-   (planning-path-to-diamond)
-   (move-horizontally)
-   (move-vertically)
-   (executing-movement)
-   (waiting-for-movement)
-   (reassess-position)
-   (check-next-object)
-   (executing-random-movement)
-   (locating-player)
-   (locate-player)
-   (check-found-object)
-   (checking-object)
-   (executing-complex-movement)
-   (complex-move)
-   (up-control isa control intention move-up button w)
-   (down-control isa control intention move-down button s)
-   (left-control isa control intention move-left button a)
-   (right-control isa control intention move-right button d)
-   (first-goal isa goal state first-step intention nil)
-   (initial-positions isa position-record rect-x nil rect-y nil test-sent nil player-type unknown)
-   )
+;;; Set vision module to look for the lowest (nearest) screen-x item first
+(set-visloc-default screen-x lowest)
 
-  (goal-focus first-goal)
-  
-  ;; === PLAYER DETECTION PRODUCTIONS ===
-  
-  ;; Production to detect connected text and initialize game
-  (p step-1
-     =goal>
-        state first-step
-     ?manual>
-        state free
-  ==>
-     =goal>
-        state second-step
-     +visual-location>
-       kind text 
-     !output! (find 'connected' text preparing to initialize game)
-  )
+;;; Add declarative memory chunks
+(add-dm
+ ;; Movement intentions
+ (move-left) (move-right) (move-up) (move-down)
+ (jump) (stretch) (compress)
+ 
+ ;; Keyboard controls
+ (w) (a) (s) (d)
+ 
+ ;; Goal states
+ (warming-up) (warm-up-waiting) (warm-up-delay) (planning) (finding-diamond) (moving-to-diamond) 
+ (avoiding-obstacle) (jumping) (transforming)
+ 
+ ;; Control mappings
+ (up-control isa control intention move-up button w)
+ (down-control isa control intention move-down button s)
+ (left-control isa control intention move-left button a)
+ (right-control isa control intention move-right button d)
+ 
+ ;; Initial goal
+ (first-goal isa goal state warming-up warm-up-count 0)
+)
 
-  (p detect-connected-text
-     =goal>
-        state second-step
-      =visual-location>
-      kind text
+;;; Set initial goal
+(goal-focus first-goal)
 
-  ==>
-     =goal>
-        state initializing-game
-     =visual-location>
-     +visual>
-        cmd move-attention
-        screen-pos =visual-location
-     !output! (Found 'connected' text preparing to initialize game)
-  )
-
-  ;; Production to send key after attending to text
-  (p send-initial-key
+;;; Warm-up phase productions to initiate visicon updates with delays
+(p warm-up-press-key
    =goal>
-      state initializing-game
-   =visual-location>
-      kind text
+      state warming-up
+      warm-up-count =count
    ?manual>
       state free
+   !eval! (and (< =count 5) (evenp =count))  ; Even counts send "d"
 ==>
    =goal>
-      state warming-up-game  ; Changed from waiting-for-objects
+      state warm-up-waiting
    +manual>
       cmd press-key
-      key w
-   !output! (Sending initial key to initialize game world)
+      key "d"  ; Send a movement key to trigger visicon update
 )
 
-; Add a new production that waits a moment before checking for objects
-(p wait-for-game-initialization
+(p warm-up-press-different-key
    =goal>
-      state warming-up-game
+      state warming-up
+      warm-up-count =count
    ?manual>
       state free
+   !eval! (and (< =count 5) (oddp =count))  ; Odd counts send "a"
 ==>
    =goal>
-      state warming-up-game  ; Stay in the same state
+      state warm-up-waiting
    +manual>
       cmd press-key
-      key w              ; Press a neutral key that doesn't affect gameplay
-   !output! (Waiting for game to initialize - delaying check)
+      key "a"  ; Send a different movement key
 )
 
-(p finish-warming-up
+(p warm-up-waiting
    =goal>
-      state warming-up-game
+      state warm-up-waiting
    ?manual>
       state free
-   !eval! (> (mp-time) 1)  ; Only match after 800ms of model time has passed
 ==>
-   -visual>
+   +temporal>
+      isa time
+      ticks 1.0  ; Wait approximately 1 second
    =goal>
-      state waiting-for-objects
-   !output! (Game should be initialized now - ready to check for objects)
+      state warm-up-delay
 )
 
-    
-(p check-for-rect-object
+(p warm-up-delay-complete
    =goal>
-      state waiting-for-objects
+      state warm-up-delay
+      warm-up-count =count
+   ?temporal>
+      buffer requested
+==>
+   =goal>
+      state warming-up
+      warm-up-count (+ =count 1)
+)
+
+(p warm-up-complete
+   =goal>
+      state warming-up
+      warm-up-count =count
+   ?manual>
+      state free
+   !eval! (>= =count 5)  ; After sending 5 keys, move to the next state
+==>
+   =goal>
+      state finding-diamond
+      warm-up-count 0
+)
+
+;;; Production rules for detecting player type
+(p detect-player-type
+   =goal>
+      state finding-diamond
    ?visual-location>
       state free
 ==>
-   =goal>
-      state checking-for-rect
    +visual-location>
-      kind polygon
-      color red
-   !output! (Checking if rectangle object is available )
+      isa visual-location
+      value "player-info"
+   =goal>
+      state planning
 )
 
-(p found-rect-object
+(p process-player-type
    =goal>
-      state checking-for-rect
+      state planning
    =visual-location>
-      screen-x =x
-      screen-y =y
-      width =w
+      isa visual-location
+      value "player-info"
    ?visual>
+      state free
+==>
+   +visual>
+      isa move-attention
+      screen-pos =visual-location
+   =goal>
+      state finding-diamond
+)
+
+(p remember-player-type
+   =goal>
+      state finding-diamond
+   =visual>
+      isa polygon
+      player-type =type
+==>
+   +imaginal>
+      isa player-info
+      type =type
+   =goal>
+      state finding-diamond
+)
+
+;;; Production rules for finding and moving to diamonds
+(p find-diamond
+   =goal>
+      state finding-diamond
+   ?visual-location>
       state free
    ?imaginal>
-        state free
+     state free
 ==>
-   =goal>
-      state ready-for-test
-   +visual>
-      cmd move-attention
-      screen-pos =visual-location
-   +imaginal>
-      isa player-state
-      rect-x =x
-      rect-y =y
-      rect-width =w
-      test-sent nil
-      player-type unknown
-      current-goal detect-player
-   !output! (Found potential rectangle object at x =x y =y)
-)
-
-;; Production to send test movement command
-  (p send-test-movement
-     =goal>
-        state ready-for-test
-     =imaginal>
-        isa player-state
-        rect-x =rx
-        rect-y =ry
-        test-sent nil
-     ?manual>
-        state free
-  ==>
-     =goal>
-        state waiting-for-response
-     =imaginal>
-        test-sent true
-     +manual>
-        cmd press-key
-        key a
-     !output! (Sending test movement command a)
-  )
-
-  (p check-after-delay
-   =goal>
-      state waiting-for-response
-   =imaginal>
-      test-sent true
-   ?manual>
-      state free       ;; Changed from busy to free - wait until keypress is complete
-==>
-   =goal>
-      state waiting-for-visual-update
-   =imaginal>
-   !output! (Key press complete waiting for visual update)
-)
-
-;; New production to add a delay before checking the rectangle
-(p wait-for-visual-update
-   =goal>
-      state waiting-for-visual-update
-   =imaginal>
-   !eval! (> (mp-time) 0.5)  ;; Wait for at least 500ms of model time
-==>
-   =goal>
-      state checking-rect
-   =imaginal>
    +visual-location>
-      kind polygon
-      color red
-   !output! (Sufficient time passed checking if rectangle has moved)
-)
-
-
-  (p detect-rect-player
-   =goal>
-      state checking-rect
-   =visual-location>
-      screen-x =new-x
-      screen-y =new-y
-      width =new-w
-   =imaginal>
-      isa player-state
-      rect-x =old-x
-      rect-y =old-y
-      rect-width =old-w
-   !eval! (or (/= =new-x =old-x) 
-              (/=  =new-y =old-y)
-              (/=  =new-w =old-w))
-==>
-   =goal>
-      state player-identified
-   =imaginal>
-      player-type rect
-      current-goal find-diamond
-   !output! (We are controlling the RECT player - detected movement or width change)
-   )
-
-
-(p detect-disc-player
-     =goal>
-      state checking-rect
-   =visual-location>
-      screen-x =new-x
-      screen-y =new-y
-      width =new-w
-   =imaginal>
-      isa player-state
-      rect-x =old-x
-      rect-y =old-y
-      rect-width =old-w
-      !eval! (and (= =new-x =old-x) 
-         (= =new-y =old-y)
-         (= =new-w =old-w))
-  ==>
-     =goal>
-        state player-identified
-     =imaginal>
-        player-type disc
-        current-goal find-diamond
-     !output! (We are controlling the DISC player)
-  )
-
-  ;; Production to initiate diamond search after player identification
-(p begin-diamond-search
-   =goal>
-      state player-identified
-   =imaginal>
-      isa player-state
-      player-type =player
-      current-goal find-diamond
-   ?visual-location>
-      state free
-==>
-   =goal>
-      state searching-for-diamond
-   =imaginal>
-      current-goal searching
-   -visual>
-   +visual-location>
-      kind polygon
+      isa visual-location
       value "diamond"
-   !output! (Beginning search for diamonds as =player player)
+   =goal>
+      state moving-to-diamond
 )
 
-(p diamond-found-initial-search
+(p no-diamond-found
    =goal>
-      state searching-for-diamond
-   =imaginal>
-      current-goal searching
+      state finding-diamond
+   ?visual-location>
+      state error
+==>
+   +manual>
+      cmd press-key
+      key "d"  ; Send a movement key to update the visicon
+   =goal>
+      state planning
+)
+
+(p focus-on-diamond
+   =goal>
+      state moving-to-diamond
    =visual-location>
+      isa visual-location
       screen-x =x
       screen-y =y
    ?visual>
       state free
 ==>
-   =goal>
-      state found-diamond
-   =imaginal>
-      diamond-x =x
-      diamond-y =y
-   =visual-location>
    +visual>
-      cmd move-attention
+      isa move-attention
       screen-pos =visual-location
-   !output! (Found diamond directly at x =x y =y)
+   =goal>
+      state planning
+      target-x =x
+      target-y =y
 )
 
-;; Production to handle finding a diamond
-(p found-diamond-state
+;;; Production rules for disc player (circular character)
+(p disc-move-right-to-diamond
    =goal>
-      state found-diamond
-   =visual-location>
+      state planning
+      target-x =tx
    =visual>
+      screen-x =vx
    =imaginal>
+      type disc
+   ?manual>
+      state free
+   !eval! (> =tx (+ =vx 2))
 ==>
+   +manual>
+      cmd press-key
+      key "d"
    =goal>
-      state planning-path-to-diamond
-   -visual-location>
+      state moving-to-diamond
+)
+
+(p disc-move-left-to-diamond
+   =goal>
+      state planning
+      target-x =tx
    =visual>
+      screen-x =vx
    =imaginal>
-      current-goal plan-path
-   !output! (Found diamond at - planning path)
+      type disc
+   ?manual>
+      state free
+   !eval! (< =tx (- =vx 2))
+==>
+   +manual>
+      cmd press-key
+      key "a"
+   =goal>
+      state moving-to-diamond
 )
 
-;; After finding a diamond, find player position
-(p find-player-position
+(p disc-jump-to-diamond
    =goal>
-      state planning-path-to-diamond
+      state planning
+      target-y =ty
+   =visual>
+      screen-y =vy
    =imaginal>
-      isa player-state
-      diamond-x =dx
-      diamond-y =dy
-      player-type =type
-      current-goal plan-path
-   ?visual-location>
+      type disc
+   ?manual>
+      state free
+   !eval! (> =ty (+ =vy 2))
+==>
+   +manual>
+      cmd press-key
+      key "w"
+   =goal>
+      state jumping
+)
+
+;;; Production rules for rect player (rectangular character)
+(p rect-move-right-to-diamond
+   =goal>
+      state planning
+      target-x =tx
+   =visual>
+      screen-x =vx
+   =imaginal>
+      type rect
+   ?manual>
+      state free
+   !eval! (> =tx (+ =vx 2))
+==>
+   +manual>
+      cmd press-key
+      key "d"
+   =goal>
+      state moving-to-diamond
+)
+
+(p rect-move-left-to-diamond
+   =goal>
+      state planning
+      target-x =tx
+   =visual>
+      screen-x =vx
+   =imaginal>
+      type rect
+   ?manual>
+      state free
+   !eval! (< =tx (- =vx 2))
+==>
+   +manual>
+      cmd press-key
+      key "a"
+   =goal>
+      state moving-to-diamond
+)
+
+(p rect-stretch-horizontally
+   =goal>
+      state planning
+   =imaginal>
+      type rect
+   ?manual>
+      state free
+==>
+   +manual>
+      cmd press-key
+      key "w"
+   =goal>
+      state transforming
+)
+
+(p rect-compress-horizontally
+   =goal>
+      state planning
+   =imaginal>
+      type rect
+   ?manual>
+      state free
+==>
+   +manual>
+      cmd press-key
+      key "s"
+   =goal>
+      state transforming
+)
+
+;;; General navigation rules
+(p after-movement-look-for-diamond
+   =goal>
+      - state finding-diamond
+   ?manual>
       state free
 ==>
    =goal>
-      state locating-player
-   =imaginal>
-      current-goal locate-player
-   -visual>
-   +visual-location>
-      isa polygon-feature
-      value =type  ; "rect" or "disc" depending on player type
-   !output! (Located diamond now finding player position)
+      state finding-diamond
 )
 
-;; If player is rect, find object with appropriate color
-(p find-rect-player
+(p after-finding-diamond-analyze-position
    =goal>
-      state locating-player
-   =imaginal>
-      isa player-state
-      player-type rect
-      current-goal locate-player
-   ?visual-location>
+      state moving-to-diamond
+   ?visual>
       state free
 ==>
    =goal>
-      state locating-player
-   =imaginal>
-   +visual-location>
-      kind polygon
-      color red
-   !output! (Looking for rectangle player (red color))
+      state planning
 )
 
-;; If player is disc, find oval object 
-(p find-disc-player
+(p at-diamond-look-for-next
    =goal>
-      state locating-player
-   =imaginal>
-      isa player-state
-      player-type disc
-      current-goal locate-player
+      state planning
+      target-x =tx
+      target-y =ty
+   =visual>
+      screen-x =vx
+      screen-y =vy
+   !eval! (and (< (abs (- =tx =vx)) 2)
+               (< (abs (- =ty =vy)) 2))
+==>
+   =goal>
+      state finding-diamond
+)
+
+;;; Look for platforms to avoid or use
+(p locate-platform
+   =goal>
+      state planning
    ?visual-location>
       state free
 ==>
-   =goal>
-      state locating-player
-   =imaginal>
    +visual-location>
-      value "disc"
-   !output! (Looking for disc player (oval object))
+      isa visual-location
+      value "platform"
+   =goal>
+      state avoiding-obstacle
 )
 
-;; Production to plan horizontal-first approach for rectangle player
-(p plan-rect-approach
+(p process-platform
    =goal>
-      state locating-player
+      state avoiding-obstacle
    =visual-location>
-      screen-x =player-x
-      screen-y =player-y
-   =imaginal>
-      isa player-state
-      player-type rect
-      diamond-x =diamond-x
-      diamond-y =diamond-y
-      current-goal locate-player
+      isa visual-location
+   ?visual>
+      state free
 ==>
-   =goal>
-      state move-horizontally
-   =imaginal>
-      horizontal-first true
-      current-goal execute-movement
-   =visual-location>
    +visual>
-      cmd move-attention
+      isa move-attention
       screen-pos =visual-location
-   !output! (Rectangle player at =player-x =player-y planning movement to diamond at =diamond-x =diamond-y)
+   =goal>
+      state planning
 )
 
-;; For disc player
-(p plan-disc-movement
+;;; Fallback behavior if stuck
+(p try-random-move-if-stuck
    =goal>
-      state locating-player
-   =visual-location>
-      screen-x =player-x
-      screen-y =player-y
-   =imaginal>
-      isa player-state
-      player-type disc
-      diamond-x =diamond-x
-      diamond-y =diamond-y
-      current-goal locate-player
-==>
-   =goal>
-   =imaginal>
-      current-goal execute-movement
-   =visual-location>
-   +visual>
-      cmd move-attention
-      screen-pos =visual-location
-   !eval! (if (> (abs (- =diamond-x =player-x)) (abs (- =diamond-y =player-y)))
-             (mod-buffer-chunk 'goal '(state move-horizontally))
-             (mod-buffer-chunk 'goal '(state move-vertically)))
-   !output! (Disc player at =player-x =player-y planning optimal path to diamond at =diamond-x =diamond-y)
-)
-
-;; === MOVEMENT PRODUCTIONS ===
-
-;; Production to move horizontally toward diamond
-(p move-horizontally-left
-   =goal>
-      state move-horizontally
-   =imaginal>
-      isa player-state
-      diamond-x =target-x
-      current-goal execute-movement
-   =visual-location>
-      screen-x =current-x
-   !eval! (< =target-x =current-x)
+      state planning
    ?manual>
       state free
+   ?imaginal>
+      buffer empty
 ==>
-   =goal>
-      state executing-movement
-   =imaginal>
    +manual>
       cmd press-key
-      key a
-   !output! (Moving left toward diamond)
+      key "d"
+   =goal>
+      state moving-to-diamond
 )
 
-(p move-horizontally-right
+(p try-random-jump-if-stuck
    =goal>
-      state move-horizontally
-   =imaginal>
-      isa player-state
-      diamond-x =target-x
-      current-goal execute-movement
-   =visual-location>
-      screen-x =current-x
-   !eval! (> =target-x =current-x)
+      state planning
    ?manual>
       state free
+   ?imaginal>
+      buffer empty
 ==>
-   =goal>
-      state executing-movement
-   =imaginal>
    +manual>
       cmd press-key
-      key d
-   !output! (Moving right toward diamond)
+      key "w"
+   =goal>
+      state jumping
 )
 
-;; Switch to vertical movement after horizontal movement gets us close enough
-(p switch-to-vertical-after-horizontal
+(p random-try-left-if-stuck
    =goal>
-      state move-horizontally
-   =imaginal>
-      isa player-state
-      diamond-x =target-x
-      diamond-y =target-y
-      current-goal execute-movement
-   =visual>
-      screen-x =current-x
-   !eval! (< (abs (- =target-x =current-x)) 5.0)  ; Close enough horizontally
+      state planning
    ?manual>
       state free
+   ?imaginal>
+      buffer empty
 ==>
-   =goal>
-      state move-vertically
-   =imaginal>
-      horizontal-first false
-   !output! (Close enough horizontally switching to vertical movement)
-)
-
-;; Stretch the rectangle to reach diamonds
-(p stretch-rectangle-up
-   =goal>
-      state move-vertically
-   =imaginal>
-      isa player-state
-      player-type rect
-      diamond-y =target-y
-      current-goal execute-movement
-   =visual>
-      screen-y =current-y
-   !eval! (< =target-y =current-y)
-   ?manual>
-      state free
-==>
-   =goal>
-      state executing-movement
-   =imaginal>
    +manual>
       cmd press-key
-      key w
-   !output! (Stretching rectangle upward to reach diamond)
+      key "a"
+   =goal>
+      state moving-to-diamond
 )
 
-;; Compress the rectangle when diamond is below
-(p compress-rectangle-down
-   =goal>
-      state move-vertically
-   =imaginal>
-      isa player-state
-      player-type rect
-      diamond-y =target-y
-      current-goal execute-movement
-   =visual>
-      screen-y =current-y
-   !eval! (> =target-y =current-y)
-   ?manual>
-      state free
-==>
-   =goal>
-      state executing-movement
-   =imaginal>
-   +manual>
-      cmd press-key
-      key s
-   !output! (Compressing rectangle downward to reach diamond)
-)
-
-;; Production to move vertically (mainly for disc player)
-(p move-vertically-up
-   =goal>
-      state move-vertically
-   =imaginal>
-      isa player-state
-      diamond-y =target-y
-      current-goal execute-movement
-   =visual-location>
-      screen-y =current-y
-   !eval! (< =target-y =current-y)
-   ?manual>
-      state free
-==>
-   =goal>
-      state executing-movement
-   =imaginal>
-   +manual>
-      cmd press-key
-      key w
-   !output! (Moving up toward diamond)
-)
-
-(p move-vertically-down
-   =goal>
-      state move-vertically
-   =imaginal>
-      isa player-state
-      diamond-y =target-y
-      current-goal execute-movement
-   =visual-location>
-      screen-y =current-y
-   !eval! (> =target-y =current-y)
-   ?manual>
-      state free
-==>
-   =goal>
-      state executing-movement
-   =imaginal>
-   +manual>
-      cmd press-key
-      key s
-   !output! (Moving down toward diamond)
-)
-
-;; Production to switch from horizontal to vertical movement for rect
-(p switch-to-vertical-movement
-   =goal>
-      state executing-movement
-   =visual-location>
-   =imaginal>
-      isa player-state
-      horizontal-first true
-      current-goal execute-movement
-   ?manual>
-      state free
-==>
-   =goal>
-      state move-vertically
-   =visual-location>
-   =imaginal>
-      horizontal-first false
-   !output! (Switching to vertical movement)
-)
-
-;; Production to switch from vertical to horizontal movement for disc
-(p switch-to-horizontal-movement
-   =goal>
-      state executing-movement
-   =visual-location>
-   =imaginal>
-      isa player-state
-      horizontal-first nil
-      current-goal execute-movement
-   ?manual>
-      state free
-==>
-   =goal>
-      state move-horizontally
-   =visual-location>
-   =imaginal>
-      horizontal-first true
-   !output! (Switching to horizontal movement)
-)
-
-
-
-;; Production to wait for manual system to be free
-(p wait-for-movement-completion
-   =goal>
-      state executing-movement
-   =imaginal>
-      current-goal execute-movement
-   ?manual>
-      state busy
-==>
-   =goal>
-      state waiting-for-movement
-   =imaginal>
-   !output! (Waiting for movement to complete)
-)
-
-;; Production to check position after movement
-(p check-position-after-movement
-   =goal>
-      state waiting-for-movement
-   =imaginal>
-      current-goal execute-movement
-   ?manual>
-      state free
-==>
-   =goal>
-      state reassess-position
-   =imaginal>
-      current-goal reassess
-   -visual>
-   +visual-location>
-      kind polygon
-      - value nil
-   !output! (Movement complete reassessing position)
-)
-
-;; Production to reset to search after reassessing
-(p after-movement-search-again
-   =goal>
-      state reassess-position
-   =imaginal>
-      current-goal reassess
-   ?visual-location>
-      buffer failure
-==>
-   =goal>
-      state searching-for-diamond
-   =imaginal>
-      current-goal searching
-   +visual-location>
-      kind polygon
-      value "diamond"
-   !output! (Reassessing failed (buffer failure) searching for diamond again)
-)
-
-;; Alternative reset to search when visual-location is empty or no diamond found
-(p after-movement-search-again-alternative
-   =goal>
-      state reassess-position
-   =imaginal>
-      current-goal reassess
-   ?visual-location>
-      state free
-==>
-   =goal>
-      state searching-for-diamond
-   =imaginal>
-      current-goal searching
-   +visual-location>
-      kind polygon
-      value "diamond"
-   !output! (Reassessing complete searching for diamond again)
-)
-
-;; Handle case when any visual object is found during reassessment
-(p found-object-during-reassessment
-   =goal>
-      state reassess-position
-   =imaginal>
-      current-goal reassess
-   =visual-location>
-==>
-   =goal>
-      state check-found-object
-   =imaginal>
-      current-goal checking-object
-   +visual>
-      cmd move-attention
-      screen-pos =visual-location
-   !output! (Found object during reassessment checking what it is)
-)
-
-;; If found object is a diamond
-(p found-diamond-during-check
-   =goal>
-      state check-found-object
-   =imaginal>
-      current-goal checking-object
-   =visual>
-      value "diamond"
-   =visual-location>
-      screen-x =x
-      screen-y =y
-==>
-   =goal>
-      state found-diamond
-   =imaginal>
-      diamond-x =x
-      diamond-y =y
-      current-goal plan-path
-   !output! (Found diamond during check)
-)
-
-;; If found object is not a diamond
-(p found-non-diamond-during-check
-   =goal>
-      state check-found-object
-   =imaginal>
-      current-goal checking-object
-   =visual>
-      - value "diamond"
-==>
-   =goal>
-      state searching-for-diamond
-   =imaginal>
-      current-goal searching
-   -visual-location>
-   +visual-location>
-      kind polygon
-      value "diamond"
-   !output! (Object is not a diamond resuming search)
-)
-
-;; === RANDOM EXPLORATION ===
-
-;; Production for random exploration when no diamonds are found
-(p random-move-left
-   =goal>
-      state random-exploration
-   =imaginal>
-      current-goal explore
-   ?manual>
-      state free
-==>
-   =goal>
-      state executing-random-movement
-   =imaginal>
-   +manual>
-      cmd press-key
-      key a
-   !output! (Random exploration - moving left)
-)
-
-(p random-move-right
-   =goal>
-      state random-exploration
-   =imaginal>
-      current-goal explore
-   ?manual>
-      state free
-==>
-   =goal>
-      state executing-random-movement
-   =imaginal>
-   +manual>
-      cmd press-key
-      key d
-   !output! (Random exploration - moving right)
-)
-
-(p random-move-jump
-   =goal>
-      state random-exploration
-   =imaginal>
-      isa player-state
-      player-type disc
-      current-goal explore
-   ?manual>
-      state free
-==>
-   =goal>
-      state executing-random-movement
-   =imaginal>
-   +manual>
-      cmd press-key
-      key w
-   !output! (Random exploration - disc player jumping)
-)
-
-(p random-move-stretch
-   =goal>
-      state random-exploration
-   =imaginal>
-      isa player-state
-      player-type rect
-      current-goal explore
-   ?manual>
-      state free
-==>
-   =goal>
-      state executing-random-movement
-   =imaginal>
-   +manual>
-      cmd press-key
-      key w
-   !output! (Random exploration - rect player stretching)
-)
-
-;; Production to go back to diamond search after random movement
-(p return-to-search-after-random-move
-   =goal>
-      state executing-random-movement
-   =imaginal>
-      current-goal explore
-   ?manual>
-      state free
-==>
-   =goal>
-      state searching-for-diamond
-   =imaginal>
-      current-goal searching
-   +visual-location>
-      kind polygon
-      value "diamond"
-   !output! (Random movement complete returning to diamond search)
-)
-
-; Fallback production when checking an object doesn't lead to any further actions
-(p check-object-fallback
-   =goal>
-      state check-found-object
-   =visual>
-   ?visual-location>
-      state free
-   =imaginal>
-==>
-   =goal>
-      state random-exploration
-   =imaginal>
-      current-goal explore
-   !output! (Falling back to random exploration when checking stalls)
-)
-
-;; Enhanced jump for disc player - more forceful jump
-(p jump-disc-higher
-   =goal>
-      state move-vertically
-   =imaginal>
-      isa player-state
-      player-type disc
-      diamond-y =target-y
-      current-goal execute-movement
-   =visual>
-      screen-y =current-y
-   !eval! (< =target-y =current-y)
-   ?manual>
-      state free
-==>
-   =goal>
-      state executing-movement
-   =imaginal>
-   +manual>
-      cmd press-key
-      key w
-   !output! (Jumping disc player higher toward diamond)
-)
-
-;; Repeated jumps for disc player to reach higher platforms
-(p continue-jumping
-   =goal>
-      state executing-movement
-   =imaginal>
-      isa player-state
-      player-type disc
-      diamond-y =target-y
-      current-goal execute-movement
-   =visual>
-      screen-y =current-y
-   !eval! (< =target-y =current-y)
-   ?manual>
-      state free
-==>
-   =goal>
-      state executing-movement
-   =imaginal>
-   +manual>
-      cmd press-key
-      key w
-   !output! (Continuing to jump to reach higher diamond)
-)
-
-;; Try diagonal movement for disc (jump and move right simultaneously)
-(p jump-right-diagonal
-   =goal>
-      state random-exploration
-   =imaginal>
-      isa player-state
-      player-type disc
-      current-goal explore
-   ?manual>
-      state free
-==>
-   =goal>
-      state executing-complex-movement
-   =imaginal>
-      current-goal complex-move
-   +manual>
-      cmd press-key
-      key w
-   !output! (Attempting diagonal jump-right movement)
-)
-
-;; Follow up with rightward movement after jump starts
-(p follow-jump-with-right
-   =goal>
-      state executing-complex-movement
-   =imaginal>
-      isa player-state
-      player-type disc
-      current-goal complex-move
-   ?manual>
-      state free
-==>
-   =goal>
-      state executing-random-movement
-   =imaginal>
-   +manual>
-      cmd press-key
-      key d
-   !output! (Following jump with rightward movement)
-)
-
-;; Try diagonal movement for disc (jump and move left simultaneously)
-(p jump-left-diagonal
-   =goal>
-      state random-exploration
-   =imaginal>
-      isa player-state
-      player-type disc
-      current-goal explore
-   ?manual>
-      state free
-==>
-   =goal>
-      state executing-complex-movement
-   =imaginal>
-      current-goal complex-move
-   +manual>
-      cmd press-key
-      key w
-   !output! (Attempting diagonal jump-left movement)
-)
-
-;; Follow up with leftward movement after jump starts
-(p follow-jump-with-left
-   =goal>
-      state executing-complex-movement
-   =imaginal>
-      isa player-state
-      player-type disc
-      current-goal complex-move
-   ?manual>
-      state free
-==>
-   =goal>
-      state executing-random-movement
-   =imaginal>
-   +manual>
-      cmd press-key
-      key a
-   !output! (Following jump with leftward movement)
-)
-
-;; Recovery production when model gets stuck
-(p recovery-from-stuck
-   =goal>
-      state check-found-object
-   =visual>
-   =imaginal>
-      current-goal checking-object
-   !eval! (> (mp-time) 0.5) ; If we've been in this state too long
-==>
-   =goal>
-      state searching-for-diamond
-   =imaginal>
-      current-goal searching
-   +visual-location>
-      kind polygon
-      value "diamond"
-   !output! (Recovering from stuck state by resuming diamond search)
-)
-
-;; More powerful horizontal movement for rectangle
-(p move-rect-horizontally-left-stronger
-   =goal>
-      state move-horizontally
-   =imaginal>
-      isa player-state
-      diamond-x =target-x
-      player-type rect
-      current-goal execute-movement
-   =visual>
-      screen-x =current-x
-   !eval! (< =target-x =current-x)
-   ?manual>
-      state free
-==>
-   =goal>
-      state executing-movement
-   =imaginal>
-   +manual>
-      cmd press-key
-      key a
-   !output! (Moving rectangle strongly left toward diamond)
-)
-
-;; More powerful horizontal movement for rectangle
-(p move-rect-horizontally-right-stronger
-   =goal>
-      state move-horizontally
-   =imaginal>
-      isa player-state
-      diamond-x =target-x
-      player-type rect
-      current-goal execute-movement
-   =visual>
-      screen-x =current-x
-   !eval! (> =target-x =current-x)
-   ?manual>
-      state free
-==>
-   =goal>
-      state executing-movement
-   =imaginal>
-   +manual>
-      cmd press-key
-      key d
-   !output! (Moving rectangle strongly right toward diamond)
-)
-
-;; Rectangle needs to stretch upward to reach diamonds
-(p rectangle-stretch-up
-   =goal>
-      state move-vertically
-   =imaginal>
-      isa player-state
-      player-type rect
-      diamond-y =target-y
-      current-goal execute-movement
-   =visual>
-      screen-y =current-y
-   !eval! (< =target-y =current-y)
-   ?manual>
-      state free
-==>
-   =goal>
-      state executing-movement
-   =imaginal>
-   +manual>
-      cmd press-key
-      key w
-   !output! (Stretching rectangle upward to reach diamond)
-)
-
-;; Rectangle needs to compress downward
-(p rectangle-compress-down
-   =goal>
-      state move-vertically
-   =imaginal>
-      isa player-state
-      player-type rect
-      diamond-y =target-y
-      current-goal execute-movement
-   =visual>
-      screen-y =current-y
-   !eval! (> =target-y =current-y)
-   ?manual>
-      state free
-==>
-   =goal>
-      state executing-movement
-   =imaginal>
-   +manual>
-      cmd press-key
-      key s
-   !output! (Compressing rectangle downward to reach diamond)
-)
-
-;; Rapidly alternate stretch and horizontal movement to reach diamonds
-(p rectangle-stretch-and-move
-   =goal>
-      state random-exploration
-   =imaginal>
-      isa player-state
-      player-type rect
-      current-goal explore
-   ?manual>
-      state free
-==>
-   =goal>
-      state executing-complex-movement
-   =imaginal>
-      current-goal complex-move
-   +manual>
-      cmd press-key
-      key w
-   !output! (Rectangle stretching up as part of composite movement)
-)
-
-;; Continue with horizontal movement after stretching
-(p rectangle-move-after-stretch
-   =goal>
-      state executing-complex-movement
-   =imaginal>
-      isa player-state
-      player-type rect
-      current-goal complex-move
-   ?manual>
-      state free
-==>
-   =goal>
-      state executing-random-movement
-   =imaginal>
-   +manual>
-      cmd press-key
-      key d
-   !output! (Moving rectangle right after stretching)
-)
-
-;; Detect when rectangle is blocking disc's path
-(p detect-rectangle-obstacle
-   =goal>
-      state move-horizontally
-   =imaginal>
-      isa player-state
-      player-type disc
-      diamond-x =target-x
-      current-goal execute-movement
-   =visual>
-      screen-x =current-x
-   ?visual-location>
-      state free
-==>
-   =goal>
-      state checking-for-obstacles
-   =imaginal>
-      current-goal check-path
-   +visual-location>
-      kind polygon
-      color red
-   !output! (Checking if rectangle is blocking path)
-)
-
-;; If rectangle is in the way, try jumping over it
-(p jump-over-rectangle
-   =goal>
-      state checking-for-obstacles
-   =imaginal>
-      isa player-state
-      player-type disc
-      current-goal check-path
-   =visual-location>
-      screen-x =rect-x
-      screen-y =rect-y
-   ?manual>
-      state free
-==>
-   =goal>
-      state executing-movement
-   =imaginal>
-      current-goal execute-movement
-   +manual>
-      cmd press-key
-      key w
-   !output! (Jumping to get over rectangle obstacle)
-)
-
-;; After jumping, continue horizontal movement
-(p continue-after-jump
-   =goal>
-      state executing-movement
-   =imaginal>
-      isa player-state
-      player-type disc
-      diamond-x =target-x
-      current-goal execute-movement
-   =visual>
-      screen-x =current-x
-   !eval! (or (< =target-x =current-x) (> =target-x =current-x))
-   ?manual>
-      state free
-==>
-   =goal>
-      state move-horizontally
-   =imaginal>
-   !output! (Continuing horizontal movement after jumping)
-)
-
-;; Try to find alternative path when blocked
-(p find-alternative-path
-   =goal>
-      state checking-for-obstacles
-   =imaginal>
-      isa player-state
-      player-type disc
-      current-goal check-path
-   ?manual>
-      state free
-==>
-   =goal>
-      state move-vertically
-   =imaginal>
-      current-goal execute-movement
-   +manual>
-      cmd press-key
-      key w
-   !output! (Finding alternative vertical path around obstacle)
-)
-  
+;;; Set parameters for the model
+(sgp :v t                ; verbose output
+     :trace-detail high  ; detailed trace
+     :esc t              ; enable subsymbolic computations 
+     :mas 3.0            ; maximum associative strength
+     :ans 0.5            ; base level constant
+     :rt 0               ; retrieval threshold
+     :pm 1               ; partial matching enabled
+     :visual-movement-tolerance 3.0 ; tolerance for visual movements
+     :visual-num-finsts 10          ; number of visual finsts
+     :visual-finst-span 10.0        ; visual finst span
+     :show-focus t                  ; show visual focus
+     :dat 0.05           ; default action time - make actions quicker for warm-up
+     :randomize-time nil ; don't randomize timing for more predictable behavior
+     :er t               ; enable randomness in utilities
+     :egs 0.1            ; expected gain noise
+     :time-master-start-increment 1.0 ; for temporal module timing
+     :time-mult 1.0                   ; for accurate temporal delays
+     )
 )

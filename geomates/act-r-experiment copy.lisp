@@ -119,15 +119,6 @@
       (when (consp updated-scene)
         (format *standard-output* "~&installing scene in visicon, scene: ~w~%" updated-scene)
         (delete-all-visicon-features) ; reset visicon
-        
-        ;; Add player-type information to visicon first so it's always available
-        (when *player-type*
-          (add-visicon-features `(isa (polygon-feature polygon)
-                                   screen-x 0
-                                   screen-y 0
-                                   value (polygon "player-info")
-                                   player-type ,*player-type*)))
-        
         (loop for (what . attributes) in updated-scene do
           (case what
             (:platform (destructuring-bind (x1 y1 x2 y2) attributes
@@ -208,7 +199,7 @@
         
         ;; Wait for second player to connect if needed
         (format t "Running the model - will wait for game to initialize...~%")
-        (run 600 t)))
+        (run 30 t)))
     
 	;; clean-up: remove hooks
 	(remove-act-r-command-monitor "output-key" "geomates-key-press")
