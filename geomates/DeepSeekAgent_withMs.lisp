@@ -58,15 +58,6 @@
 (chunk-type diamond-info id x y distance-from-player)
 (chunk-type spatial-map platform-count diamond-count last-updated)
 
-
-(chunk-type (text-feature (:include visual-location)))
-(chunk-type (text (:include visual-object)) message sender)
-(chunk-type message-info content sender response-required)
-
-(chunk-type message-test state count last-sent timer)
-(chunk-type outgoing-message content priority)
-(chunk-type message-check-timer last-check)
-
 ;;; Do this to avoid warnings when chunks are created
 (define-chunks true false polygon)
 
@@ -91,12 +82,6 @@
  (down-control isa control intention move-down button s)
  (left-control isa control intention move-left button a)
  (right-control isa control intention move-right button d)
-
-   (message-test-control isa message-test state ready count 0 last-sent 0 timer 5.0)
-   (test-msg-1 isa outgoing-message content (:diamond-found :x 25 :y 30) priority 1)
-   (test-msg-2 isa outgoing-message content (:need-help :obstacle platform) priority 2)
-   (test-msg-3 isa outgoing-message content (:going-to :x 40 :y 20) priority 3)
-   (message-timer isa message-check-timer last-check 0)
  
  ;; Initial goal
  (first-goal isa goal state warming-up warm-up-count 0)
@@ -156,10 +141,9 @@
    ?temporal>
       buffer requested
 ==>
-   !eval! (let ((new-count (if (numberp =count) (+ =count 1) 1)))
-            (set-chunk-slot-value-fct goal 'warm-up-count new-count))
    =goal>
       state warming-up
+      warm-up-count (+ =count 1)
 )
 
 (p warm-up-complete
@@ -450,14 +434,6 @@
 (p after-movement-look-for-diamond
    =goal>
       - state finding-diamond
-      - state checking-message
-      - state reading-message
-      - state evaluating-message
-      - state message-testing
-      - state preparing-message
-      - state message-sent
-      - state waiting-before-next
-      - state waiting-timer
    ?manual>
       state free
 ==>
@@ -468,9 +444,6 @@
 (p after-finding-diamond-analyze-position
    =goal>
       state moving-to-diamond
-      - state checking-message
-      - state reading-message
-      - state evaluating-message
    ?visual>
       state free
 ==>
@@ -481,11 +454,6 @@
 (p at-diamond-look-for-next
    =goal>
       state planning
-      - state message-testing
-      - state preparing-message
-      - state message-sent
-      - state waiting-before-next
-      - state waiting-timer
       target-x =tx
       target-y =ty
    =visual>
@@ -945,6 +913,59 @@
       state moving-to-diamond
 )
 
+;;; Message Communication Productions
+(p detect-unreachable-diamond
+   =goal>
+      state planning
+      target-y =ty
+   =visual>
+      screen-y =vy
+   =imaginal>
+      type disc
+   ?manual>
+      state free
+   !eval! (> (- =ty =vy) 10)  ; Diamond is too high for disc player
+==>
+   +manual>
+      cmd press-key
+      key "m(:need-help :diamond-at =ty)"  ; Send message with m prefix
+   =goal>
+      state waiting-for-help
+)
+
+(p receive-help-request
+   =goal>
+      state finding-diamond
+   =visual>
+      isa message
+      content "(:need-help :diamond-at =y)"  ; Message from other player
+   =imaginal>
+      type rect  ; I'm the rectangle player
+==>
+   =goal>
+      state helping-partner
+      target-y =y
+   +imaginal>
+      isa help-request
+      target-y =y
+)
+
+(p notify-position-ready
+   =goal>
+      state helping-partner
+   =visual>
+      screen-x =x
+      screen-y =y
+   =imaginal>
+      target-y =ty
+   !eval! (< (abs (- =y =ty)) 5)  ; Close to target position
+==>
+   +manual>
+      cmd press-key
+      key "m(:ready-at =x =y)"  ; Tell disc player I'm in position
+   =goal>
+      state holding-position
+)
 (p assess-movement-cost
    =goal>
       state planning
@@ -964,314 +985,400 @@
 )
 
 
-(p periodic-diamond-search
+;;; Collaborative Positioning Productions
+(p rect-position-as-platform
    =goal>
-      state checking-message
-   ?visual-location>
-      state error
+      state helping-partner
+   =visual>
+      isa oval  ; Looking at disc player
+      screen-x =disc-x
+   =imaginal>
+      target-y =ty
+   ?manual>
+      state free
+==>
+   =goal>
+      state moving-to-position
+      target-x =disc-x  ; Position above disc player
+      target-y (+ =ty 3)  ; Slightly below the diamond
+)
+
+(p rect-stretch-as-platform
+   =goal>
+      state holding-position
+   =imaginal>
+      type rect
    ?manual>
       state free
 ==>
    +manual>
       cmd press-key
-      key "d"  ;; Send a movement command to update the visicon
+      key "w"  ; Stretch horizontally to create wider platform
+   =goal>
+      state transformed-for-help
+)
+
+(p disc-use-rect-platform
+   =goal>
+      state waiting-for-help
+   =visual>
+      isa polygon
+      value "rect"
+      screen-x =rx
+      screen-y =ry
+   =visual-location>
+      isa message
+      content "(:ready-at =x =y)"
+   ?manual>
+      state free
+==>
+   =goal>
+      state moving-to-platform
+      target-x =rx
+)
+
+(p disc-jump-from-platform
+   =goal>
+      state moving-to-platform
+   =visual>
+      isa polygon
+      value "rect"
+      screen-x =rx 
+      screen-y =ry
+   =imaginal>
+      type disc
+   !eval! (< (abs (- =current-x =rx)) 2)  ; Positioned under rectangle
+==>
+   +manual>
+      cmd press-key
+      key "w"  ; Jump to use rectangle as platform
+   =goal>
+      state jumping-to-diamond
+)
+
+;;; Diamond Allocation Productions
+(p analyze-diamond-heights
+   =goal>
+      state scanning-diamonds
+   =visual>
+      isa visual-object
+      value "diamond"
+      screen-y =y
+   =imaginal>
+      type =player-type
+==>
+   +imaginal>
+      isa diamond-allocation
+      height =y
+      suitable-for (if (> =y 15) 'rect 'disc)  ; High diamonds for rect, low for disc
+   =goal>
+      state allocating-targets
+)
+
+(p select-diamonds-by-suitability
    =goal>
       state finding-diamond
-)
-
-(p locate-message
-   =goal>
-      - state warm-up-waiting
-      - state warm-up-delay
-      - state checking-message
-      - state message-testing
-      - state preparing-message
-      - state message-sent
-      - state waiting-before-next
-      - state waiting-timer
-   ?retrieval>
-      state free
    ?visual-location>
       state free
+   =imaginal>
+      type =my-type
 ==>
-   +retrieval>
-      isa message-check-timer
-   =goal>
-      state checking-message-timer
-)
-
-(p check-message-timer
-   =goal>
-      state checking-message-timer
-   =retrieval>
-      isa message-check-timer
-      last-check =last
-   !eval! (> (- (mp-time) =last) 2.0)  ;; Only check every 2 seconds
-==>
-   =retrieval>
-      last-check (mp-time)
    +visual-location>
       isa visual-location
-      value "message"
+      value "diamond"
+      :nearest (if (eq =my-type 'rect) 'highest 'lowest)  ; Rect focuses on high diamonds
    =goal>
-      state checking-message
+      state selecting-suitable-diamond
 )
 
-(p too-soon-for-message-check
+(p claim-suitable-diamond
    =goal>
-      state checking-message-timer
-   =retrieval>
-      isa message-check-timer
-      last-check =last
-   !eval! (<= (- (mp-time) =last) 2.0)  ;; Don't check too frequently
+      state selecting-suitable-diamond
+   =visual-location>
+      screen-y =y
+   =imaginal>
+      type =my-type
+   !eval! (or (and (eq =my-type 'rect) (> =y 15))
+              (and (eq =my-type 'disc) (< =y 15)))  ; Diamond height suits player type
 ==>
+   +manual>
+      cmd press-key
+      key "m(:claiming-diamond =y)"  ; Inform other player
+   =goal>
+      state moving-to-diamond
+)
+
+;;; Coordinated Strategies Productions
+(p rect-create-bridge
+   =goal>
+      state evaluating-access
+   =visual>
+      isa visual-object
+      screen-x =x1
+      screen-y =y
+   =retrieval>
+      isa platform-info
+      x =x2
+   !eval! (and (> (abs (- =x1 =x2)) 3)  ; Gap between platforms
+               (< (abs (- =x1 =x2)) 10)  ; But within reach if stretched
+               (< (abs (- =y =retrieval-y)) 3))  ; At similar heights
+==>
+   =goal>
+      state creating-bridge
+      target-x (/ (+ =x1 =x2) 2)  ; Position in the middle of gap
+)
+
+(p coordinate-diamond-collection
    =goal>
       state finding-diamond
-)
-
-;; Add this new production to handle message search failure
-(p message-not-found
-   =goal>
-      state checking-message
-   ?visual-location>
-      state error
-==>
-   =goal>
-      state finding-diamond  ;; Return to normal behavior
-)
-(p attend-to-message
-   =goal>
-      state checking-message
-   =visual-location>
-      isa visual-location
-      value "message"
-   ?visual>
-      state free
-==>
-   +visual>
-      isa move-attention
-      screen-pos =visual-location
-   =goal>
-      state reading-message
-)
-
-(p process-message-content
-   =goal>
-      state reading-message
    =visual>
-      isa text
-      message =content
-      sender =sender
+      isa visual-object
+      value "diamond"
+      screen-x =dx
+      screen-y =dy
+   =retrieval>
+      isa player-info
+      other-player-x =px
+      other-player-y =py
+   !eval! (< (abs (- =dx =px)) (abs (- =dx =current-x)))  ; Other player is closer
+==>
+   +manual>
+      cmd press-key
+      key "m(:you-get-diamond =dx =dy)"  ; Suggest other player gets it
+   =goal>
+      state finding-next-diamond  ; Look for a different diamond
+)
+;;; Enhanced Environmental Awareness Productions
+(p track-other-player-position
+   =goal>
+      state scanning-environment
+   =visual>
+      isa visual-object
+      - value "player-info"  ; Not looking at self
+      - value "diamond"      ; Not a diamond
+      - value "platform"     ; Not a platform
    ?imaginal>
       state free
 ==>
    +imaginal>
-      isa message-info
-      content =content
-      sender =sender
-      response-required t
+      isa partner-tracking
+      partner-x =visual-x
+      partner-y =visual-y
+      timestamp (mp-time)
    =goal>
-      state evaluating-message
-   ;; Log that we received a message
-   !eval! (format t "~%RECEIVED MESSAGE: ~S from ~S~%" =content =sender)
+      state updating-partner-model
 )
 
-(p evaluate-diamond-location-message
+(p analyze-level-structure
    =goal>
-      state evaluating-message
-   =imaginal>
-      isa message-info
-      content =content
-   ?retrieval>
+      state warm-up-complete
+   ?visual-location>
       state free
-   ;; This checks if the message appears to be about a diamond location
-   !eval! (and (listp =content) 
-               (or (member :diamond-found =content) 
-                   (member 'diamond-found =content)))
 ==>
-   ;; Extract location information from the message
-   ;; This is simplified - you'd need to adapt based on your message format
-   =imaginal>
-      response-required nil
+   +visual-location>
+      isa visual-location
+      :attended nil
    =goal>
-      state finding-diamond
-   !eval! (format t "~%DIAMOND LOCATION MESSAGE PROCESSED~%")
+      state mapping-environment
 )
 
-(p respond-to-message
+(p build-level-knowledge
    =goal>
-      state evaluating-message
+      state mapping-environment
+   =visual-location>
+      isa visual-location
+      screen-x =x 
+      screen-y =y
+      value =type
    =imaginal>
-      isa message-info
-      response-required t
+      isa spatial-map
+==>
+   =imaginal>
+      last-object-type =type
+      last-object-location (list =x =y)
+   =goal>
+      state mapping-environment
+      ; Continue mapping until we have a good understanding
+)
+;;; Recovery and Adaptation Productions
+(p detect-stuck-state
+   =goal>
+      state moving-to-diamond
+   =visual>
+      screen-x =current-x
+      screen-y =current-y
+   =retrieval>
+      isa position-history
+      x =prev-x
+      y =prev-y
+      timestamp =time
+   !eval! (and (< (abs (- =current-x =prev-x)) 0.5)
+               (< (abs (- =current-y =prev-y)) 0.5)
+               (> (- (mp-time) =time) 3))  ; Position unchanged for 3 seconds
+==>
+   =goal>
+      state recovery-mode
+)
+
+(p try-alternative-approach
+   =goal>
+      state recovery-mode
+   =imaginal>
+      type =player-type
    ?manual>
       state free
 ==>
-   =imaginal>
-      response-required nil
+   +manual>
+      cmd press-key
+      key (if (eq =player-type 'disc) "w" "s")  ; Jump if disc, compress if rect
    =goal>
-      state finding-diamond
-   ;; Send a simple acknowledgment message
-   !eval! (progn
-            (format t "~%SENDING ACKNOWLEDGMENT~%")
-            (send-message '(:acknowledge :received)))
+      state finding-new-path
 )
 
-(p return-to-normal-after-message
+(p request-partner-assistance
    =goal>
-      state evaluating-message
-   =imaginal>
-      isa message-info
-      response-required nil
-==>
-   =goal>
-      state finding-diamond
-   -imaginal>
-)
-
-
-;; Start message testing after warm-up
-(p initialize-message-testing
-   =goal>
-      state finding-diamond
-      warm-up-count =count
-   ?retrieval>
-      state free
-   !eval! (>= =count 5)  ;; Only start message testing after warm-up is complete
-==>
-   +retrieval>
-      isa message-test
-      state ready
-   =goal>
-      state message-testing
-)
-
-;; Retrieve a test message to send
-(p retrieve-message-to-send
-   =goal>
-      state message-testing
-   =retrieval>
-      isa message-test
-      state ready
-      count =count
-   !eval! (< =count 4)  ;; Stop after sending 3 messages
-==>
-   +retrieval>
-      isa outgoing-message
-      priority (1+ =count)
-   =goal>
-      state preparing-message
-)
-
-;; Send the test message
-(p send-test-message
-   =goal>
-      state preparing-message
-   =retrieval>
-      isa outgoing-message
-      content =content
+      state recovery-mode
    ?manual>
       state free
 ==>
-   !eval! (progn
-            (format t "~%SENDING TEST MESSAGE: ~S~%" =content)
-            (send-message =content))
+   +manual>
+      cmd press-key
+      key "m(:stuck-need-help =current-x =current-y)"
    =goal>
-      state message-sent
+      state waiting-for-rescue
 )
 
-;; Update message test counter
-(p update-message-test-counter
+;;; Test message sending production for disc player
+;;; Test message sending production for disc player
+(p disc-send-test-message
    =goal>
-      state message-sent
-   ?retrieval>
+      state finding-diamond
+   =imaginal>
+      type disc
+   ?manual>
       state free
 ==>
-   +retrieval>
-      isa message-test
+   !eval! (format t "~%DISC PLAYER ATTEMPTING TO SEND MESSAGE~%")
+   +manual>
+      cmd press-key
+      key "m"
    =goal>
-      state waiting-before-next
+      state sending-message-part1
 )
 
-;; Record that we sent a message
-(p record-message-sent
+(p disc-complete-message
    =goal>
-      state waiting-before-next
-   =retrieval>
-      isa message-test
-      count =count
-      - state done
+      state sending-message-part1
+   ?manual>
+      state free
 ==>
-   =retrieval>
-      count (1+ =count)
-      last-sent (mp-time)
-   +temporal>
-      isa time
-      ticks 5.0  ;; Wait 5 seconds before next message
-   =goal>
-      state waiting-timer
-)
-
-;; Wait between messages
-(p wait-for-next-message
-   =goal>
-      state waiting-timer
-   =retrieval>
-      isa message-test
-   ?temporal>
-      buffer requested
-==>
-   =retrieval>
-      state ready
-   =goal>
-      state message-testing
-)
-
-;; End message testing after sending all messages
-(p finish-message-testing
-   =goal>
-      state message-testing
-   =retrieval>
-      isa message-test
-      count =count
-   !eval! (>= =count 3)
-==>
-   =retrieval>
-      state done
+   !eval! (format t "~%DISC PLAYER SENDING MESSAGE CONTENT~%")
+   +manual>
+      cmd press-key
+      key "(:test-message-from-disc)"
    =goal>
       state finding-diamond
 )
 
-;; Return to normal goal state if message testing is done
-(p return-to-normal-after-testing
+;;; Test message sending production for rect player
+(p rect-send-test-message
    =goal>
-      state waiting-before-next
-   =retrieval>
-      isa message-test
-      state done
+      state finding-diamond
+   =imaginal>
+      type rect
+   ?manual>
+      state free
 ==>
+   !eval! (format t "~%RECT PLAYER ATTEMPTING TO SEND MESSAGE~%")
+   +manual>
+      cmd press-key
+      key "m"
+   =goal>
+      state sending-message-part1
+)
+
+(p rect-complete-message
+   =goal>
+      state sending-message-part1
+   ?manual>
+      state free
+==>
+   !eval! (format t "~%RECT PLAYER SENDING MESSAGE CONTENT~%")
+   +manual>
+      cmd press-key
+      key "(:test-message-from-rect)"
+   =goal>
+      state finding-diamond
+)
+
+;;; Message detection productions
+(p search-for-message-to-rect
+   =goal>
+      state finding-diamond
+   =imaginal>
+      type rect
+   ?visual-location>
+      state free
+==>
+   !eval! (format t "~%RECT PLAYER SEARCHING FOR MESSAGES~%")
+   +visual-location>
+      isa visual-location
+      value "message-to-rect"
+   =goal>
+      state checking-messages
+)
+
+(p search-for-message-to-disc
+   =goal>
+      state finding-diamond
+   =imaginal>
+      type disc
+   ?visual-location>
+      state free
+==>
+   !eval! (format t "~%DISC PLAYER SEARCHING FOR MESSAGES~%")
+   +visual-location>
+      isa visual-location
+      value "message-to-disc"
+   =goal>
+      state checking-messages
+)
+
+(p process-found-message
+   =goal>
+      state checking-messages
+   =visual-location>
+      isa visual-location
+   ?visual>
+      state free
+==>
+   !eval! (format t "~%PLAYER FOUND A MESSAGE IN VISICON~%")
+   +visual>
+      isa move-attention
+      screen-pos =visual-location
+   =goal>
+      state processing-message-content
+)
+
+(p message-not-found
+   =goal>
+      state checking-messages
+   ?visual-location>
+      state error
+==>
+   !eval! (format t "~%NO MESSAGE FOUND IN VISICON~%")
    =goal>
       state finding-diamond
 )
 
 
-;;; Set parameters for the model
 (sgp :v t                ; verbose output
      :trace-detail high  ; detailed trace
-     :esc t              ; enable subsymbolic computations 
-     :mas 5.0            ; maximum associative strength
-     :ans 0.5            ; base level constant
-     :rt 0               ; retrieval threshold
-     :pm 1               ; partial matching enabled
-     :visual-movement-tolerance 3.0 ; tolerance for visual movements
-     :visual-num-finsts 15          ; number of visual finsts
-     :visual-finst-span 10.0        ; visual finst span
-     :show-focus t                  ; show visual focus
-     :dat 0.05           ; default action time - make actions quicker for warm-up
-     :randomize-time nil ; don't randomize timing for more predictable behavior
-     :er t               ; enable randomness in utilities
-     :egs 0.1            ; expected gain noise
-     :time-master-start-increment 1.0 ; for temporal module timing
-     :time-mult 1.0                   ; for accurate temporal delays
-     )
+     :show-focus t       ; show visual focus
+     :visual-num-finsts 15
+     ;; ... other settings ...
+     :cmdt t             ; Command trace
+     :actr-output-all t  ; Output all details
+)
+
 )

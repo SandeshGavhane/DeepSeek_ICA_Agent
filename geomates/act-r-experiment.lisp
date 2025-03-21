@@ -26,6 +26,9 @@
 (defparameter *player-type* nil
   "Type of player we're controlling (disc or rect)")
 
+(defparameter *message*  ()
+  "variable that holds latest message received from other agent")
+
 ;; Function to skip the telnet protocol bytes
 (defun skip-telnet-bytes (socket)
   "Skip the telnet control bytes on the socket"
@@ -118,6 +121,7 @@
         (format *error-output* "~&error reading from game server (err: ~w).~%" err))
       (when (consp updated-scene)
         (format *standard-output* "~&installing scene in visicon, scene: ~w~%" updated-scene)
+
         (delete-all-visicon-features) ; reset visicon
         
         ;; Add player-type information to visicon first so it's always available
@@ -130,6 +134,25 @@
         
         (loop for (what . attributes) in updated-scene do
           (case what
+            (:msg->rect (setf *message* attributes)
+                        (when *message*
+                          ;; Add message to visicon as a special feature
+                          (add-visicon-features `(isa (text-feature text)
+                                                    screen-x 10
+                                                    screen-y 10
+                                                    value (text "message")
+                                                    message ,*message*
+                                                    sender "rect"))))
+
+            (:msg->disc (setf *message* attributes)
+                        (when *message*
+                          ;; Add message to visicon as a special feature
+                          (add-visicon-features `(isa (text-feature text)
+                                                    screen-x 10
+                                                    screen-y 10
+                                                    value (text "message")
+                                                    message ,*message*
+                                                    sender "disc"))))
             (:platform (destructuring-bind (x1 y1 x2 y2) attributes
                          (add-visicon-features `(isa (polygon-feature polygon)
                                                 screen-x ,(* 0.5 (+ x1 x2))
@@ -163,6 +186,7 @@
                         rotation ,rotation
                         diamonds ,diamonds
                         color red regular (true nil) sides (nil 4)))))))))))
+            
 
 (defun geomates-experiment (&optional human)
   (declare (optimize (debug 3) (safety 3)))

@@ -15,9 +15,9 @@ if $size_mismatch {
                                          -message "The screen resolution is not the same as it was the last time the Environment was used.  Should the window positions reset to the defaults?"]
 } else { set reset_window_sizes 0}
 if {$reset_window_sizes != "yes"} {
-  set window_config(.visicon) 1460x353+2108+1060
+  set window_config(.visicon) 1460x353+597+798
   set changed_window_list(.visicon) 1
-  set window_config(.control_panel) 235x700+1184+297
+  set window_config(.control_panel) 235x700+1105+193
   set changed_window_list(.control_panel) 1
   set window_config(.copyright) 400x290+1080+575
   set changed_window_list(.copyright) 1

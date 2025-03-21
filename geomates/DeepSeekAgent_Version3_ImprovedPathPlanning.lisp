@@ -155,8 +155,12 @@
    !eval! (>= =count 5)
 ==>
    =goal>
-      state scanning-environment  ;; Changed from finding-diamond to new state
+      state finding-diamond  ;; Keep the original transition
       warm-up-count 0
+   +imaginal>  ;; Add environmental tracking in parallel
+      isa spatial-map
+      platform-count 0
+      diamond-count 0
 )
 
 ;;; Production rules for detecting player type
@@ -677,6 +681,254 @@
       last-updated (mp-time)
    =goal>
       state finding-diamond
+)
+
+(p opportunistic-rect-movement-right
+   =goal>
+      state scanning-environment
+   =imaginal>
+      isa spatial-map
+   =retrieval>
+      isa player-info
+      type rect
+   ?manual>
+      state free
+==>
+   +manual>
+      cmd press-key
+      key "d"
+   =goal>
+      state scanning-environment
+)
+
+(p opportunistic-rect-movement-left
+   =goal>
+      state scanning-environment
+   =imaginal>
+      isa spatial-map
+   =retrieval>
+      isa player-info
+      type rect
+   ?manual>
+      state free
+==>
+   +manual>
+      cmd press-key
+      key "a"
+   =goal>
+      state scanning-environment
+)
+
+(p fast-rect-stretch-if-diamond-above
+   =goal>
+      state finding-diamond
+   =visual-location>
+      isa visual-location
+      value "diamond"
+      screen-y =y
+   =visual>
+      screen-y =vy
+   =imaginal>
+      type rect
+   ?manual>
+      state free
+   !eval! (> =y =vy)
+==>
+   +manual>
+      cmd press-key
+      key "w"
+   =goal>
+      state moving-to-diamond
+)
+
+(p scan-environment-selectively
+   =goal>
+      state scanning-environment
+   =imaginal>
+      isa spatial-map
+   ?visual-location>
+      state free
+==>
+   +visual-location>
+      isa visual-location
+      :nearest current-position
+   =goal>
+      state processing-nearby-object
+)
+
+(p interrupt-scanning-for-diamond
+   =goal>
+      state scanning-environment
+   =visual-location>
+      isa visual-location
+      value "diamond"
+   ?visual>
+      state free
+==>
+   +visual>
+      isa move-attention
+      screen-pos =visual-location
+   =goal>
+      state moving-to-diamond
+)
+
+(p calculate-diamond-distance
+   =goal>
+      state finding-diamond
+   =visual-location>
+      isa visual-location
+      value "diamond"
+      screen-x =dx
+      screen-y =dy
+   =visual>
+      isa polygon
+      screen-x =px
+      screen-y =py
+   ?imaginal>
+      state free
+==>
+   +imaginal>
+      isa diamond-location
+      x =dx
+      y =dy
+      distance (sqrt (+ (sq (- =dx =px)) (sq (- =dy =py))))
+   =goal>
+      state evaluating-diamond
+)
+
+(p select-nearest-diamond
+   =goal>
+      state evaluating-diamond
+   =imaginal>
+      isa diamond-location
+      x =x
+      y =y
+      distance =d
+   =retrieval>  ; Previously retrieved diamond
+      isa diamond-location
+      distance =old-d
+   !eval! (< =d =old-d)  ; Current diamond is closer
+==>
+   =imaginal>  ; Keep this as new best candidate
+   =goal>
+      state finding-more-diamonds
+)
+
+(p keep-previous-diamond
+   =goal>
+      state evaluating-diamond
+   =imaginal>
+      isa diamond-location
+      distance =d
+   =retrieval>
+      isa diamond-location
+      distance =old-d
+      x =old-x
+      y =old-y
+   !eval! (>= =d =old-d)  ; Current diamond is not better
+==>
+   =imaginal>  ; Replace with previous best diamond
+      x =old-x
+      y =old-y
+      distance =old-d
+   =goal>
+      state finding-more-diamonds
+)
+
+(p check-path-to-diamond
+   =goal>
+      state planning
+   =imaginal>
+      isa diamond-location
+      x =target-x
+      y =target-y
+   ?visual-location>
+      state free
+==>
+   +visual-location>
+      isa visual-location
+      value "platform"
+      :nearest current-location
+   =goal>
+      state checking-obstacles
+)
+
+(p identify-obstacle-in-path
+   =goal>
+      state checking-obstacles
+   =visual-location>
+      isa visual-location
+      value "platform"
+   =visual>
+      isa visual-object
+   =imaginal>
+      isa diamond-location
+      x =target-x
+      y =target-y
+   ?retrieval>
+      state free
+==>
+   +retrieval>
+      isa path-planning
+   =goal>
+      state planning-path
+)
+
+(p plan-path-around-obstacle
+   =goal>
+      state planning-path
+   =visual>
+      isa polygon
+      height =h
+      width =w
+      screen-x =obstacle-x
+      screen-y =obstacle-y
+   =imaginal>
+      isa diamond-location
+      x =target-x
+      y =target-y
+==>
+   +imaginal>
+      isa path-planning
+      step 1
+      next-move (if (> =target-x =obstacle-x) "right" "left")
+      obstacle-ahead t
+   =goal>
+      state executing-path
+)
+
+(p execute-path-step
+   =goal>
+      state executing-path
+   =imaginal>
+      isa path-planning
+      next-move =move
+   ?manual>
+      state free
+==>
+   +manual>
+      cmd press-key
+      key =move
+   =goal>
+      state moving-to-diamond
+)
+
+(p assess-movement-cost
+   =goal>
+      state planning
+   =imaginal>
+      isa diamond-location
+      x =target-x
+      y =target-y
+   =visual>
+      screen-x =current-x
+      screen-y =current-y
+==>
+   =goal>
+      state moving-to-diamond
+      ; Set horizontal and vertical costs based on distance
+      target-x =target-x
+      target-y =target-y
 )
 
 
