@@ -1,4 +1,5 @@
-# To run single player as agent and other player as human run 5-run-all.bat file
+# check out code from git https://github.com/SandeshGavhane/DeepSeek_ICA_Agent in c:\DeepSeek_ICA_Agent folder 
+## To run single player as agent and other player as human run 5-run-all.bat file
 ##  1.press any key in first command prompt for telnet to open second agent
 ##  2.when last command prompt opens which i ACT-R ,allow it to load environment and then enter (geomates-experiment) command in ACT-R command prompt
 # To run two player as agent
