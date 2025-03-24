@@ -100,10 +100,18 @@
 ;; messages need to be s-expressions or anything 'read'able by the lisp parser (lists, numbers, strings, etc.)
 ;; sticking to a well-defined language such as KQML/KIF is a good idea
 (defun send-message (msg)
-  "sends a message (anyting printable, but should be an s-expression)"
-  (format *gstream* "~w~a~a" msg #\Return #\Newline)
-  (finish-output *gstream*))
+  "sends a message (anything printable, but should be an s-expression)"
+  (ensure-connection)
+  (when *gstream*
+    (format t "Raw message received: ~s~%" msg)  ; ~s will print it with readability preserved
+    ;; First send the 'm' character (ASCII 109) which is the message command
+    (write-char #\m *gstream*)
+    ;; Then write the message itself in a way that can be read by the Lisp reader
+    (write msg :stream *gstream* :readably t :pretty nil)
+    ;; Ensure the message is sent immediately
+    (finish-output *gstream*)))
 
+;
 ;; function to be called by ACT-R to handle key presses by the model
 ;; keypress is send to gameserver and updated scene is read back and inserted into visicon
 (defun respond-to-key-press (model key)
@@ -135,24 +143,24 @@
         (loop for (what . attributes) in updated-scene do
           (case what
             (:msg->rect (setf *message* attributes)
-                        (when *message*
-                          ;; Add message to visicon as a special feature
-                          (add-visicon-features `(isa (text-feature text)
-                                                    screen-x 10
-                                                    screen-y 10
-                                                    value (text "message")
-                                                    message ,*message*
-                                                    sender "rect"))))
-
+                 (when *message*
+                 ;; Add message to visicon as a special feature
+                 (add-visicon-features `(isa (text-feature text)
+                                          screen-x 10
+                                          screen-y 10
+                                          value (text "message")
+                                          message ,*message*
+                                          sender "rect"))))
+    
             (:msg->disc (setf *message* attributes)
-                        (when *message*
-                          ;; Add message to visicon as a special feature
-                          (add-visicon-features `(isa (text-feature text)
-                                                    screen-x 10
-                                                    screen-y 10
-                                                    value (text "message")
-                                                    message ,*message*
-                                                    sender "disc"))))
+                      (when *message*
+                        ;; Add message to visicon as a special feature
+                        (add-visicon-features `(isa (text-feature text)
+                                                  screen-x 10
+                                                  screen-y 10
+                                                  value (text "message")
+                                                  message ,*message*
+                                                  sender "disc"))))
             (:platform (destructuring-bind (x1 y1 x2 y2) attributes
                          (add-visicon-features `(isa (polygon-feature polygon)
                                                 screen-x ,(* 0.5 (+ x1 x2))

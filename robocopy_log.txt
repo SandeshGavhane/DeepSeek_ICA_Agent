@@ -3,7 +3,7 @@
    ROBOCOPY     ::     Robust File Copy for Windows                              
 -------------------------------------------------------------------------------
 
-  Started : Sunday, 23 March 2025 11:55:12
+  Started : Monday, 24 March 2025 02:54:49
    Source : C:\DeepSeek_ICA_Agent\geomates\
      Dest : C:\DeepSeek_ICA_Agent_2\geomates\
 
@@ -13,18 +13,22 @@
 
 ------------------------------------------------------------------------------
 
-	    Newer     		   15175	C:\DeepSeek_ICA_Agent\geomates\DeepSeekAgent.lisp
+	  *EXTRA File 		   27108	C:\DeepSeek_ICA_Agent_2\geomates\DeepSeekAgentMessageTest_1.lisp
+	  *EXTRA File 		   11115	C:\DeepSeek_ICA_Agent_2\geomates\DeepSeekAgent_Version2_Reactive_PlayerDetection.lisp
+	  *EXTRA File 		   19713	C:\DeepSeek_ICA_Agent_2\geomates\DeepSeekAgent_Version3_ImprovedPathPlanning.lisp
+	    Newer     		   11214	C:\DeepSeek_ICA_Agent\geomates\act-r-experiment.lisp
+	    Newer     		   21984	C:\DeepSeek_ICA_Agent\geomates\geomates.lisp
 
 ------------------------------------------------------------------------------
 
                Total    Copied   Skipped  Mismatch    FAILED    Extras
     Dirs :         4         4         4         0         0         0
-   Files :        34         1        33         0         0         0
-   Bytes :    3.46 m    14.8 k    3.44 m         0         0         0
+   Files :        39         2        37         0         0         3
+   Bytes :    3.52 m    32.4 k    3.49 m         0         0    56.5 k
    Times :   0:00:00   0:00:00                       0:00:00   0:00:00
 
 
-   Speed :           15.175.000 Bytes/sec.
-   Speed :              868,320 MegaBytes/min.
-   Ended : Sunday, 23 March 2025 11:55:12
+   Speed :           11.066.000 Bytes/sec.
+   Speed :              633,202 MegaBytes/min.
+   Ended : Monday, 24 March 2025 02:54:49
 

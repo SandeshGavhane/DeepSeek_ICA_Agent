@@ -406,7 +406,7 @@
 				     
 				     ;; send current scene to anyone listening
 				     (let* ((*print-pretty* nil)
-					    (current-scene (format nil "((:RECT ~,2f ~,2f ~,2f ~,2f ~,4f ~d)(:DISC ~,2f ~,2f ~,2f ~d)~a~a~{~w~}~{~w~})"
+					    (current-scene (format nil "((:RECT ~,2f ~,2f ~,2f ~,2f ~,4f ~d)(:DISC ~,2f ~,2f ~,2f ~d)~s~s~{~w~}~{~w~})"
 								  rect-pos-x rect-pos-y rect-width rect-height rect-rotation diamonds-rect
 								  disc-pos-x disc-pos-y +disc-radius+ diamonds-disc
 								  (if message-from-disc
