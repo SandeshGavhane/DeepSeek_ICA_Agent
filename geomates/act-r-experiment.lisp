@@ -5,6 +5,7 @@
 ;; in ACT-R, one would directly load the model (agent)
 ; (load-act-r-model "ACT-R:my-great-model.lisp")
 
+     
 #-SBCL (eval-when (:compile :load-toplevel)
 	 (error "Sorry, this experiment requires ACT-R based on the SBCL compiler; install SBCL and load ACT-R"))
 
@@ -140,60 +141,71 @@
                                    value (polygon "player-info")
                                    player-type ,*player-type*)))
         
-        (loop for (what . attributes) in updated-scene do
-          (case what
-            (:msg->rect (setf *message* attributes)
-                 (when *message*
-                 ;; Add message to visicon as a special feature
-                 (add-visicon-features `(isa (text-feature text)
-                                          screen-x 10
-                                          screen-y 10
-                                          value (text "message")
-                                          message ,*message*
-                                          sender "rect"))))
-    
-            (:msg->disc (setf *message* attributes)
-                      (when *message*
-                        ;; Add message to visicon as a special feature
-                        (add-visicon-features `(isa (text-feature text)
-                                                  screen-x 10
-                                                  screen-y 10
-                                                  value (text "message")
-                                                  message ,*message*
-                                                  sender "disc"))))
-            (:platform (destructuring-bind (x1 y1 x2 y2) attributes
-                         (add-visicon-features `(isa (polygon-feature polygon)
-                                                screen-x ,(* 0.5 (+ x1 x2))
-                                                screen-y ,(* 0.5 (+ y1 y2))
-                                                value (polygon "platform")
-                                                height ,(abs (- y2 y1))
-                                                width  ,(abs (- x2 x1))
-                                                color black regular (true nil) sides (nil 4)))))
-
-            (:diamond (destructuring-bind (x y) attributes
-                        (add-visicon-features `(isa (polygon-feature polygon) 
-                                              screen-x ,x screen-y ,y
-                                              value (polygon "diamond")))))
-
-            (:disc (destructuring-bind (x y radius diamonds) attributes
-                     (add-visicon-features `(isa oval
-                                          screen-x ,x
-                                          screen-y ,y
-                                          value (oval "disc")
-                                          radius ,radius
-                                          diamonds ,diamonds))))
+        ;; Process each element in the scene data safely
+        (loop for item in updated-scene do
+          (cond
+            ;; Skip processing for string elements (empty messages)
+            ((stringp item)
+             (format *standard-output* "~&Skipping empty message string: ~S~%" item))
             
-            (:rect (destructuring-bind (x y width height rotation diamonds) attributes
-                     (add-visicon-features 
-                      `(isa (polygon-feature polygon)
-                        screen-x ,x
-                        screen-y ,y
-                        value (polygon "rect")
-                        height ,height
-                        width  ,width
-                        rotation ,rotation
-                        diamonds ,diamonds
-                        color red regular (true nil) sides (nil 4)))))))))))
+            ;; Process normal list elements
+            ((listp item)
+             (let ((what (first item))
+                   (attributes (rest item)))
+               (case what
+                 (:msg->rect 
+                  (setf *message* attributes)
+                  (when (and *message* (listp *message*))
+                    (add-visicon-features `(isa (text-feature text)
+                                             screen-x 10
+                                             screen-y 10
+                                             value (text "message")
+                                             message ,*message*
+                                             sender "disc"))))
+                
+                 (:msg->disc 
+                  (setf *message* attributes)
+                  (when (and *message* (listp *message*))
+                    (add-visicon-features `(isa (text-feature text)
+                                             screen-x 10
+                                             screen-y 10
+                                             value (text "message")
+                                             message ,*message*
+                                             sender "rect"))))
+                
+                 (:platform (destructuring-bind (x1 y1 x2 y2) attributes
+                              (add-visicon-features `(isa (polygon-feature polygon)
+                                                   screen-x ,(* 0.5 (+ x1 x2))
+                                                   screen-y ,(* 0.5 (+ y1 y2))
+                                                   value (polygon "platform")
+                                                   height ,(abs (- y2 y1))
+                                                   width  ,(abs (- x2 x1))
+                                                   color black regular (true nil) sides (nil 4)))))
+                
+                 (:diamond (destructuring-bind (x y) attributes
+                             (add-visicon-features `(isa (polygon-feature polygon) 
+                                                 screen-x ,x screen-y ,y
+                                                 value (polygon "diamond")))))
+                
+                 (:disc (destructuring-bind (x y radius diamonds) attributes
+                          (add-visicon-features `(isa oval
+                                               screen-x ,x
+                                               screen-y ,y
+                                               value (oval "disc")
+                                               radius ,radius
+                                               diamonds ,diamonds))))
+                
+                 (:rect (destructuring-bind (x y width height rotation diamonds) attributes
+                          (add-visicon-features 
+                           `(isa (polygon-feature polygon)
+                             screen-x ,x
+                             screen-y ,y
+                             value (polygon "rect")
+                             height ,height
+                             width  ,width
+                             rotation ,rotation
+                             diamonds ,diamonds
+                             color red regular (true nil) sides (nil 4))))))))))))))
             
 
 (defun geomates-experiment (&optional human)

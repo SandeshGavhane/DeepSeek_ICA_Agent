@@ -11,6 +11,12 @@ REM Add command to load ACT-R
 echo (load "C:/DeepSeek_ICA_Agent_2/actr7.x/load-act-r.lisp") >> actr_temp.lisp
 REM Add command to load the experiment interface
 echo (load "C:/DeepSeek_ICA_Agent_2/geomates/act-r-experiment.lisp") >> actr_temp.lisp
+
+REM Add command to load the experiment interface
+echo (load "C:/DeepSeek_ICA_Agent_2/geomates/execution-interface.lisp") >> actr_temp.lisp
+REM Add command to load the experiment interface
+echo (load "C:/DeepSeek_ICA_Agent_2/geomates/pddl-interface.lisp") >> actr_temp.lisp
+
 REM Add command to run the ACT-R environment
 echo (run-environment) >> actr_temp.lisp
 REM Add command to load the DeepSeekAgent model

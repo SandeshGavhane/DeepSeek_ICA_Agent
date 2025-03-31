@@ -3,7 +3,7 @@
    ROBOCOPY     ::     Robust File Copy for Windows                              
 -------------------------------------------------------------------------------
 
-  Started : Monday, 24 March 2025 02:54:49
+  Started : Saturday, 29 March 2025 08:32:36
    Source : C:\DeepSeek_ICA_Agent\geomates\
      Dest : C:\DeepSeek_ICA_Agent_2\geomates\
 
@@ -13,22 +13,40 @@
 
 ------------------------------------------------------------------------------
 
+	  *EXTRA File 		     280	C:\DeepSeek_ICA_Agent_2\geomates\actr-bridge.lisp
+	  *EXTRA File 		   15809	C:\DeepSeek_ICA_Agent_2\geomates\DeepSeekAgent copy.lisp
+	  *EXTRA File 		   27108	C:\DeepSeek_ICA_Agent_2\geomates\DeepSeekAgentMessageTest_1 copy.lisp
 	  *EXTRA File 		   27108	C:\DeepSeek_ICA_Agent_2\geomates\DeepSeekAgentMessageTest_1.lisp
+	  *EXTRA File 		    7797	C:\DeepSeek_ICA_Agent_2\geomates\DeepSeekAgent_MessageTest2.lisp
+	  *EXTRA File 		   45971	C:\DeepSeek_ICA_Agent_2\geomates\DeepSeekAgent_planning.lisp
+	  *EXTRA File 		    7853	C:\DeepSeek_ICA_Agent_2\geomates\DeepSeekAgent_PlayerDetectionNew.lisp
+	  *EXTRA File 		   31254	C:\DeepSeek_ICA_Agent_2\geomates\DeepSeekAgent_Version1.lisp
+	  *EXTRA File 		   27496	C:\DeepSeek_ICA_Agent_2\geomates\DeepSeekAgent_Version2.lisp
 	  *EXTRA File 		   11115	C:\DeepSeek_ICA_Agent_2\geomates\DeepSeekAgent_Version2_Reactive_PlayerDetection.lisp
 	  *EXTRA File 		   19713	C:\DeepSeek_ICA_Agent_2\geomates\DeepSeekAgent_Version3_ImprovedPathPlanning.lisp
-	    Newer     		   11214	C:\DeepSeek_ICA_Agent\geomates\act-r-experiment.lisp
-	    Newer     		   21984	C:\DeepSeek_ICA_Agent\geomates\geomates.lisp
+	  *EXTRA File 		   11115	C:\DeepSeek_ICA_Agent_2\geomates\DeepSeekAgent_Version3_Reactive_PlayerDetection.lisp
+	  *EXTRA File 		   19713	C:\DeepSeek_ICA_Agent_2\geomates\DeepSeekAgent_Version4_ImprovedPathPlanning.lisp
+	  *EXTRA File 		    7853	C:\DeepSeek_ICA_Agent_2\geomates\DeepSeekAgent_Version5_PlayerDetectionNew.lisp
+	  *EXTRA File 		    9063	C:\DeepSeek_ICA_Agent_2\geomates\DeepSeekAgent_Version6_MessageSending.lisp
+	  *EXTRA File 		   32177	C:\DeepSeek_ICA_Agent_2\geomates\DeepSeekAgent_Version7_PD_MS_ES.lisp
+	  *EXTRA File 		   33146	C:\DeepSeek_ICA_Agent_2\geomates\DeepSeekAgent_Version8_Planning.lisp
+	  *EXTRA File 		   28754	C:\DeepSeek_ICA_Agent_2\geomates\DeepSeekAgent_withMs.lisp
+	  *EXTRA File 		   21985	C:\DeepSeek_ICA_Agent_2\geomates\geomates_.lisp
+	  *EXTRA File 		    4118	C:\DeepSeek_ICA_Agent_2\geomates\model-dummy.lisp
+	  *EXTRA File 		   10195	C:\DeepSeek_ICA_Agent_2\geomates\model-dummy_shengyang.lisp
+	  *EXTRA File 		   11070	C:\DeepSeek_ICA_Agent_2\geomates\navigation-functions.lisp
+	    Newer     		   42351	C:\DeepSeek_ICA_Agent\geomates\pddl-interface.lisp
 
 ------------------------------------------------------------------------------
 
                Total    Copied   Skipped  Mismatch    FAILED    Extras
-    Dirs :         4         4         4         0         0         0
-   Files :        39         2        37         0         0         3
-   Bytes :    3.52 m    32.4 k    3.49 m         0         0    56.5 k
+    Dirs :         5         5         5         0         0         0
+   Files :        41         1        40         0         0        22
+   Bytes :    3.60 m    41.3 k    3.55 m         0         0   401.0 k
    Times :   0:00:00   0:00:00                       0:00:00   0:00:00
 
 
-   Speed :           11.066.000 Bytes/sec.
-   Speed :              633,202 MegaBytes/min.
-   Ended : Monday, 24 March 2025 02:54:49
+   Speed :           42.351.000 Bytes/sec.
+   Speed :            2.423,344 MegaBytes/min.
+   Ended : Saturday, 29 March 2025 08:32:36
 
